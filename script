@@ -1,0 +1,54 @@
+plink to vcf:
+plink2 --bfile plate --fa /gpfs/data/user/shweta_lab/data/genomes/Homo_sapiens.GRCh37.dna.primary_assembly.fa --export vcf --out plate_GRCH37 &
+
+Liftover of VCF file from hg19 to hg38:
+python liftoverfromvcf.py plate_GRCH37.vcf hg19ToHg38.over.chain.gz --out plate_GRCH37_liftover_GRCH38.vcf &
+
+sed 's/^##fileformat=VCFv4.3/##fileformat=VCFv4.2/' plate_GRCH37_liftover_GRCH38.vcf > plate_GRCH37_liftiver_GRCH38_v4.2.vcf
+
+sed 's/\.CEL_[A-Z]*[0-9]*[A-Z]*\.CEL\t/\t/g;s/\.CEL_[A-Z]*[0-9]*[A-Z]*\.CEL$//g' plate_GRCH37_liftover_GRCH38_v4.2.vcf > plate_GRCH37_liftover_GRCH38_v42_nameModified.vcf
+
+zcat plate_GRCH37_liftover_GRCH38_v42_nameModified.vcf.gz |sed 's/^##contig=<ID=/##contig=<ID=chr/' |gzip -c > plate_GRCH37_liftover_GRCH38_v42_nameModified_chrPrefix.vcf.gz
+
+##PD associated variants in the microarray
+grep -i -e "parkinson" -e "parkinsonism" ~/../shweta_lab/data/PD_gwas/Axiom_PMRA/annot.csv| cut -d "," -f 1 | sed 's/"//g'  > pdAssociatedSNPID.txt
+grep -i -e "parkinsonism" -e "alzheimer" -e "parkinson" ~/../shweta_lab/data/PD_gwas/Axiom_PMRA/annot.csv| cut -d "," -f 1 | sed 's/"//g' > pdAndAdAssociatedSNPID.txt
+
+##PD associated variants in our dataset of 192 samples
+vcftools --gzvcf plate_GRCH37_liftover_GRCH38_v42_nameModified_chrPrefix.vcf.gz --snps pdAssociatedSNPID.txt --recode --recode-INFO-all --stdout |gzip -c > pdAssociatedSNPs.vcf.gz
+zcat pdAssociatedSNPs.vcf.gz | grep -v '#' |wc -l
+
+##Converting VCF file to TSV format
+vcf2tsvpy --input_vcf pdAssociatedSNPs.vcf.gz --out_tsv pdAssociatedSNPs.tsv --compress
+
+## non-zero allele frequency
+zcat pdAssociatedSNPs.tsv.gz|cut -f 3,10|grep -e "0/1" -e "1/1"|cut -f 1|sort -u|wc -l
+
+##R
+> anotation <- read.table('/gpfs/data/user/shweta_lab/data/PD_gwas/Axiom_PMRA/annot.csv', sep=',', header=TRUE)
+> library("data.table")
+> pdAssociatedSNPs <- fread('pdAssociatedSNPs.tsv.gz', skip="#", sep='\t', header=TRUE)
+> library("dplyr")
+> pdAssociatedSNPswithAnnot <- inner_join(pdAssociatedSNPs, anotation, by=c('ID'='Probe.Set.ID'))
+> sampleinfo<-read.table('sampleInfo.tsv',sep='\t', header=TRUE)
+> colnames(sampleinfo)[5] <- "YOPD_LOPD_FMWD_control"
+> colnames(sampleinfo)[8] <- "Family_history"
+> colnames(sampleinfo)[9] <- "Age.at.onset.of.symptoms_FMWD"
+> pdAssociatedSNPswithAnnotAndsampleInfo <- inner_join(pdAssociatedSNPswithAnnot, sampleinfo, by=c('VCF_SAMPLE_ID'='Barcode'))
+> fwrite(pdAssociatedSNPswithAnnotAndsampleInfoAfrq,file='pdAssociatedSNPswithAnnotAndsampleInfo.tsv.gz',sep='\t', compress='gzip')
+
+##<0.05 MAF in external cohorts
+zcat pdAssociatedSNPswithAnnotAndsampleInfo.tsv.gz | cut -f 3,36  |sed 's/\/\/\//'$'\t/g;s/"//g;s/\/\//'$'\t/g'|tail -n +2|awk 'BEGIN{FS=OFS="\t"} NR==1{print "ID","CEU_MAF","CHB_MAF","JPT_MAF","YRI_MAF"}{print $1,$2,$4,$6,$8}'|awk 'BEGIN{FS="\t"}{if ($2<0.05 && $3<0.05 && $4<0.05 && $5<0.05) print $1}'|sort -u|wc -l
+
+##High-confidence variants
+zcat pdAssociatedSNPswithAnnotAndsampleInfo.tsv.gz |awk 'BEGIN{FS="\t"} NR==1; NR>1 {if ($44~/PATHOGENIC/) print $0}'|grep -v -i -e '0/1.*.AUTOSOMAL RECESSIVE' -e '0/0' |gzip -c > pdAssociatedSNPsClinvarAutoDominant.tsv.gz
+
+##MAF <0.05 filteration
+vcftools  --gzvcf pdAssociatedSNPs.vcf.gz  --max-maf 0.05 --recode --recode-INFO-all --stdout | sed 's/^##contig=<ID=/##contig=<ID=chr/' |gzip -c > pdAssociatedSNPsMAFfilter.vcf.gz
+
+##Allele frequency calculation in our data
+zcat pdAssociatedSNPs.tsv.gz | cut -f 3,10|tail -n +3|grep -v "0/0" |sort |uniq -c|sed 's/^ *//g;s/ /\t/g' > pdAssociatedSNPsAfrq.txt
+
+##integration the allele frequency data with high-confidence variants
+zcat pdAssociatedSNPsClinvarAutoDominant.tsv.gz|tail -n +2|cut  --output-delimiter=$'\t' -f 1-2,9-10,69,44,61-63,25|sed 's/\/\/\/ .*\/\/\/ /'$'\t/g' |cut  --output-delimiter=$'\t' -f 1-5,7-11|sed 's/\/\/ /\t/g'|cut  --output-delimiter=$'\t' -f 1-4,6,9,11-16|awk 'BEGIN{FS=OFS="\t"}NR==1{print "Chr_loc", "Sample_ID", "GT", "AF_in_our_data", "Gene_ID", "Gene_name", "Var_func", "Prev_evidence",
+"YOPD_LOPD_FMWD_Control", "Age", "Sex"}{print $1":"$2,$3,$4,$12,$6,$7,$5,$8,$9,$10,$11}' > pdAssociatedSNPsClinvarAutoDominantStats.txt
