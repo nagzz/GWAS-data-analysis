@@ -49,6 +49,6 @@ vcftools  --gzvcf pdAssociatedSNPs.vcf.gz  --max-maf 0.05 --recode --recode-INFO
 ##Allele frequency calculation in our data
 zcat pdAssociatedSNPs.tsv.gz | cut -f 3,10|tail -n +3|grep -v "0/0" |sort |uniq -c|sed 's/^ *//g;s/ /\t/g' > pdAssociatedSNPsAfrq.txt
 
-##integration the allele frequency data with high-confidence variants
+##integration of the allele frequency data with high-confidence variants
 zcat pdAssociatedSNPsClinvarAutoDominant.tsv.gz|tail -n +2|cut  --output-delimiter=$'\t' -f 1-2,9-10,69,44,61-63,25|sed 's/\/\/\/ .*\/\/\/ /'$'\t/g' |cut  --output-delimiter=$'\t' -f 1-5,7-11|sed 's/\/\/ /\t/g'|cut  --output-delimiter=$'\t' -f 1-4,6,9,11-16|awk 'BEGIN{FS=OFS="\t"}NR==1{print "Chr_loc", "Sample_ID", "GT", "AF_in_our_data", "Gene_ID", "Gene_name", "Var_func", "Prev_evidence",
 "YOPD_LOPD_FMWD_Control", "Age", "Sex"}{print $1":"$2,$3,$4,$12,$6,$7,$5,$8,$9,$10,$11}' > pdAssociatedSNPsClinvarAutoDominantStats.txt
