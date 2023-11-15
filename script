@@ -4,7 +4,7 @@ plink2 --bfile plate --fa /gpfs/data/user/shweta_lab/data/genomes/Homo_sapiens.G
 ##Liftover of VCF file from hg19 to hg38 using the https://github.com/shwetaramdas/liftoverfromvcf
 python liftoverfromvcf.py plate_GRCH37.vcf hg19ToHg38.over.chain.gz --out plate_GRCH37_liftover_GRCH38.vcf &
 
-sed 's/^##fileformat=VCFv4.3/##fileformat=VCFv4.2/' plate_GRCH37_liftover_GRCH38.vcf > plate_GRCH37_liftiver_GRCH38_v4.2.vcf
+sed 's/^##fileformat=VCFv4.3/##fileformat=VCFv4.2/' plate_GRCH37_liftover_GRCH38.vcf > plate_GRCH37_liftover_GRCH38_v4.2.vcf
 
 sed 's/\.CEL_[A-Z]*[0-9]*[A-Z]*\.CEL\t/\t/g;s/\.CEL_[A-Z]*[0-9]*[A-Z]*\.CEL$//g' plate_GRCH37_liftover_GRCH38_v4.2.vcf > plate_GRCH37_liftover_GRCH38_v42_nameModified.vcf
 
