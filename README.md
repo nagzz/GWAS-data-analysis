@@ -1,2 +1,2 @@
 # pd_gwas
-The following script is to handle the multiple sample vcf file converted from gwas plink file data.
+Conversion of gwas plink file data to multi-sample VCF file
